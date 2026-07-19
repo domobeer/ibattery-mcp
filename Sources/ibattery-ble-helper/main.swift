@@ -18,7 +18,9 @@ guard serverFD >= 0 else {
     fatalError("socket() failed: \(errno)")
 }
 
-var serverAddr = makeUnixSocketAddress(path: bleHelperSocketPath)
+guard var serverAddr = makeUnixSocketAddress(path: bleHelperSocketPath) else {
+    fatalError("socket path too long: \(bleHelperSocketPath)")
+}
 let bindResult = withUnsafePointer(to: &serverAddr) { ptr -> Int32 in
     ptr.withMemoryRebound(to: sockaddr.self, capacity: 1) { sockPtr in
         bind(serverFD, sockPtr, socklen_t(MemoryLayout<sockaddr_un>.size))
@@ -36,7 +38,10 @@ print("ibattery-ble-helper listening on \(bleHelperSocketPath)")
 DispatchQueue.global(qos: .userInitiated).async {
     while true {
         let clientFD = accept(serverFD, nil, nil)
-        guard clientFD >= 0 else { continue }
+        guard clientFD >= 0 else {
+            if errno == EINTR { continue }
+            fatalError("accept() failed: \(errno)")
+        }
 
         var buffer = [UInt8](repeating: 0, count: 256)
         let bytesRead = read(clientFD, &buffer, buffer.count)
