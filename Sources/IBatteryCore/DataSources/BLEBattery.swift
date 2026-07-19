@@ -147,11 +147,9 @@ public func parseHelperResponse(_ data: Data) -> [DeviceBatteryInfo] {
 }
 
 public struct BLEBatterySource: BatteryDataSource {
-    let connectTimeoutSeconds: Int
     let readTimeoutSeconds: Int
 
-    public init(connectTimeoutSeconds: Int = 2, readTimeoutSeconds: Int = 6) {
-        self.connectTimeoutSeconds = connectTimeoutSeconds
+    public init(readTimeoutSeconds: Int = 6) {
         self.readTimeoutSeconds = readTimeoutSeconds
     }
 
@@ -170,6 +168,15 @@ public struct BLEBatterySource: BatteryDataSource {
 
         var readTimeout = timeval(tv_sec: readTimeoutSeconds, tv_usec: 0)
         setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &readTimeout, socklen_t(MemoryLayout<timeval>.size))
+
+        // Without this, a write() to a socket whose peer has already closed
+        // the connection (e.g. the helper app quit mid-request) raises
+        // SIGPIPE, whose default disposition terminates the process — which
+        // would crash the MCP process itself, exactly what this whole
+        // component exists to avoid. SO_NOSIGPIPE makes write() return
+        // EPIPE as an ordinary error instead.
+        var noSigPipe: Int32 = 1
+        setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &noSigPipe, socklen_t(MemoryLayout<Int32>.size))
 
         // makeUnixSocketAddress returns an Optional (nil only if the path is
         // too long for sockaddr_un.sun_path); it must be unwrapped before we
