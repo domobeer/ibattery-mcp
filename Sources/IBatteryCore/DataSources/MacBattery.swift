@@ -31,7 +31,7 @@ public func fetchMacBatteryInfo() -> DeviceBatteryInfo? {
     return nil
 }
 
-public struct MacBatterySource: Sendable {
+public struct MacBatterySource: BatteryDataSource {
     public init() {}
     public func fetchAll() async -> [DeviceBatteryInfo] {
         if let info = fetchMacBatteryInfo() {

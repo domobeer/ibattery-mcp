@@ -139,7 +139,7 @@ public final class BLEBatteryScanner: NSObject, CBCentralManagerDelegate, CBPeri
     }
 }
 
-public struct BLEBatterySource: Sendable {
+public struct BLEBatterySource: BatteryDataSource {
     let scanDuration: TimeInterval
     public init(scanDuration: TimeInterval = 4.0) {
         self.scanDuration = scanDuration
