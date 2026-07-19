@@ -37,6 +37,6 @@ final class MCPServerSmokeTests: XCTestCase {
 
         let outputData = outPipe.fileHandleForReading.availableData
         let response = String(data: outputData, encoding: .utf8) ?? ""
-        XCTAssertTrue(response.contains("\"tools\""), "Expected a tools/list response, got: \(response)")
+        XCTAssertTrue(response.contains("\"id\":2") && response.contains("\"tools\":[]"), "Expected a tools/list response with id:2 and empty tools array, got: \(response)")
     }
 }
