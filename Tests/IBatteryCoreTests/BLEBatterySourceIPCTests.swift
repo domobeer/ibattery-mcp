@@ -24,4 +24,24 @@ final class BLEBatterySourceIPCTests: XCTestCase {
         let data = Data("not json".utf8)
         XCTAssertEqual(parseHelperResponse(data), [])
     }
+
+    func testDecodeBLEHelperBluetoothStatus_authorizedAndPoweredOn() {
+        let json = #"{"authorized":true,"poweredOn":true}"#
+        let data = Data(json.utf8)
+        let status = try? deviceJSONDecoder.decode(BLEHelperBluetoothStatus.self, from: data)
+        XCTAssertEqual(status, BLEHelperBluetoothStatus(authorized: true, poweredOn: true))
+    }
+
+    func testDecodeBLEHelperBluetoothStatus_notAuthorizedNotPoweredOn() {
+        let json = #"{"authorized":false,"poweredOn":false}"#
+        let data = Data(json.utf8)
+        let status = try? deviceJSONDecoder.decode(BLEHelperBluetoothStatus.self, from: data)
+        XCTAssertEqual(status, BLEHelperBluetoothStatus(authorized: false, poweredOn: false))
+    }
+
+    func testDecodeBLEHelperBluetoothStatus_malformedData_returnsNil() {
+        let data = Data("not json".utf8)
+        let status = try? deviceJSONDecoder.decode(BLEHelperBluetoothStatus.self, from: data)
+        XCTAssertNil(status)
+    }
 }

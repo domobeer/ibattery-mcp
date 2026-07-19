@@ -48,8 +48,8 @@ public func makeServer(registry: DeviceRegistry) async -> Server {
         case "get_all_devices_status":
             let devices = await registry.getAllDevicesStatus()
             var content: [Tool.Content] = [.text(text: encodeDevicesAsText(devices), annotations: nil, _meta: nil)]
-            let canConnectToHelper = BLEBatterySource.canReachHelper()
-            if let warning = bleHelperUnreachableWarning(canConnect: canConnectToHelper) {
+            let bluetoothStatus = BLEBatterySource.fetchBluetoothStatus()
+            if let warning = bleHelperStatusWarning(status: bluetoothStatus) {
                 content.append(.text(text: warning, annotations: nil, _meta: nil))
             }
             return .init(content: content, isError: false)
@@ -59,7 +59,12 @@ public func makeServer(registry: DeviceRegistry) async -> Server {
                 return .init(content: [.text(text: "Missing required argument: query", annotations: nil, _meta: nil)], isError: true)
             }
             guard let device = await registry.getDeviceBattery(query: query) else {
-                return .init(content: [.text(text: "No device found matching '\(query)'", annotations: nil, _meta: nil)], isError: true)
+                var message = "No device found matching '\(query)'"
+                let bluetoothStatus = BLEBatterySource.fetchBluetoothStatus()
+                if let warning = bleHelperStatusWarning(status: bluetoothStatus) {
+                    message += "\n\n\(warning)"
+                }
+                return .init(content: [.text(text: message, annotations: nil, _meta: nil)], isError: true)
             }
             return .init(content: [.text(text: encodeDevicesAsText([device]), annotations: nil, _meta: nil)], isError: false)
 

@@ -40,12 +40,4 @@ final class StalenessTests: XCTestCase {
         let known = await registry.listKnownDevices()
         XCTAssertEqual(known.first?.stale, true)
     }
-
-    func testBleHelperUnreachableWarning_falseReturnsMessage() {
-        XCTAssertNotNil(bleHelperUnreachableWarning(canConnect: false))
-    }
-
-    func testBleHelperUnreachableWarning_trueReturnsNil() {
-        XCTAssertNil(bleHelperUnreachableWarning(canConnect: true))
-    }
 }
