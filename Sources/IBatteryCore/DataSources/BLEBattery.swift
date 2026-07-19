@@ -31,10 +31,21 @@ public final class BLEBatteryScanner: NSObject, CBCentralManagerDelegate, CBPeri
         }
     }
 
+    private func cleanup(_ peripheral: CBPeripheral) {
+        pendingPeripherals.remove(peripheral.identifier)
+        centralManager.cancelPeripheralConnection(peripheral)
+    }
+
     private func finish() {
         guard !finished else { return }
         finished = true
         centralManager.stopScan()
+        // Clean up any peripherals still in-flight when timeout fires
+        for peripheral in discoveredPeripherals {
+            if peripheral.state == .connected || peripheral.state == .connecting {
+                centralManager.cancelPeripheralConnection(peripheral)
+            }
+        }
         continuation?.resume(returning: results)
         continuation = nil
     }
@@ -72,16 +83,32 @@ public final class BLEBatteryScanner: NSObject, CBCentralManagerDelegate, CBPeri
     }
 
     public func peripheral(_ peripheral: CBPeripheral, didDiscoverServices error: Error?) {
-        guard error == nil, let services = peripheral.services else { return }
+        guard error == nil, let services = peripheral.services else {
+            cleanup(peripheral)
+            return
+        }
+        var found = false
         for service in services where service.uuid == batteryServiceUUID {
             peripheral.discoverCharacteristics([batteryLevelCharacteristicUUID], for: service)
+            found = true
+        }
+        if !found {
+            cleanup(peripheral)
         }
     }
 
     public func peripheral(_ peripheral: CBPeripheral, didDiscoverCharacteristicsFor service: CBService, error: Error?) {
-        guard error == nil, let characteristics = service.characteristics else { return }
+        guard error == nil, let characteristics = service.characteristics else {
+            cleanup(peripheral)
+            return
+        }
+        var found = false
         for characteristic in characteristics where characteristic.uuid == batteryLevelCharacteristicUUID {
             peripheral.readValue(for: characteristic)
+            found = true
+        }
+        if !found {
+            cleanup(peripheral)
         }
     }
 
@@ -94,7 +121,10 @@ public final class BLEBatteryScanner: NSObject, CBCentralManagerDelegate, CBPeri
               characteristic.uuid == batteryLevelCharacteristicUUID,
               let data = characteristic.value,
               let percentage = parseBatteryLevelCharacteristic(data)
-        else { return }
+        else {
+            cleanup(peripheral)
+            return
+        }
 
         let info = DeviceBatteryInfo(
             id: peripheral.identifier.uuidString,
@@ -105,7 +135,7 @@ public final class BLEBatteryScanner: NSObject, CBCentralManagerDelegate, CBPeri
             lastUpdated: Date()
         )
         results.append(info)
-        centralManager.cancelPeripheralConnection(peripheral)
+        cleanup(peripheral)
     }
 }
 
