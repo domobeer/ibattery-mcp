@@ -12,10 +12,10 @@ or any other MCP client) can call.
 
 | Device | Status |
 |---|---|
-| This Mac's own battery | ✅ Implemented, verified |
-| Generic Bluetooth devices (standard Battery Service — most Bluetooth mice/keyboards) | ✅ Implemented, verified |
-| iPhone / iPad | ✅ Implemented, verified |
-| Apple Watch (via a paired iPhone) | ⚠️ Implemented, unit-tested, **not yet verified against real hardware** |
+| This Mac's own battery | ⚠️ Implemented, unit-tested — not yet confirmed against real hardware |
+| Generic Bluetooth devices (standard Battery Service — most Bluetooth mice/keyboards) | ⚠️ Implemented, unit-tested — real BLE scanning works, but no compatible peripheral confirmed yet |
+| iPhone / iPad | ⚠️ Implemented, unit-tested — not yet confirmed against a real device |
+| Apple Watch (via a paired iPhone) | ⚠️ Implemented, unit-tested — not yet confirmed against real hardware |
 | AirPods | 🚧 Not implemented yet (planned) |
 | Another Mac on the same network | 🚧 Not implemented yet (planned) |
 
