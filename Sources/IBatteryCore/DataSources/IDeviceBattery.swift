@@ -33,20 +33,29 @@ func runLibimobiledeviceTool(_ command: String, _ arguments: [String]) -> (stdou
     process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
     process.arguments = [command] + arguments
     let outPipe = Pipe()
+    let errPipe = Pipe()
     process.standardOutput = outPipe
-    process.standardError = Pipe()
+    process.standardError = errPipe
     do {
         try process.run()
     } catch {
         return (Data(), -1)
     }
-    let outData = outPipe.fileHandleForReading.readDataToEndOfFile()
+
+    var stdoutData = Data()
+    let errDrainThread = Thread {
+        _ = errPipe.fileHandleForReading.readDataToEndOfFile()
+    }
+    errDrainThread.start()
+    stdoutData = outPipe.fileHandleForReading.readDataToEndOfFile()
     process.waitUntilExit()
-    return (outData, process.terminationStatus)
+    return (stdoutData, process.terminationStatus)
 }
 
 public struct IDeviceStatus: Sendable, Equatable {
     public let toolsInstalled: Bool
+    /// Count of devices detected but not readable; a catch-all for any per-device fetch failure
+    /// (untrusted pairing, malformed battery data, or device disconnected mid-enumeration).
     public let connectedButUnreadableCount: Int
 }
 
