@@ -146,6 +146,11 @@ public func parseHelperResponse(_ data: Data) -> [DeviceBatteryInfo] {
     (try? deviceJSONDecoder.decode([DeviceBatteryInfo].self, from: data)) ?? []
 }
 
+public func bleHelperUnreachableWarning(canConnect: Bool) -> String? {
+    guard !canConnect else { return nil }
+    return "ibattery-ble-helper isn't running, so nearby Bluetooth devices (other than this Mac's own battery) weren't checked. Launch it once (double-click the .app, or `open` it) — it stays running in the background afterward."
+}
+
 public struct BLEBatterySource: BatteryDataSource {
     let readTimeoutSeconds: Int
 
@@ -159,6 +164,19 @@ public struct BLEBatterySource: BatteryDataSource {
                 continuation.resume(returning: self.fetchAllBlocking())
             }
         }
+    }
+
+    public static func canReachHelper() -> Bool {
+        let fd = socket(AF_UNIX, SOCK_STREAM, 0)
+        guard fd >= 0 else { return false }
+        defer { close(fd) }
+        guard var addr = makeUnixSocketAddress(path: bleHelperSocketPath) else { return false }
+        let result = withUnsafePointer(to: &addr) { ptr -> Int32 in
+            ptr.withMemoryRebound(to: sockaddr.self, capacity: 1) { sockPtr in
+                connect(fd, sockPtr, socklen_t(MemoryLayout<sockaddr_un>.size))
+            }
+        }
+        return result == 0
     }
 
     private func fetchAllBlocking() -> [DeviceBatteryInfo] {

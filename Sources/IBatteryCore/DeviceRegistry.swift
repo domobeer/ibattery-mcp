@@ -4,6 +4,21 @@ public protocol BatteryDataSource: Sendable {
     func fetchAll() async -> [DeviceBatteryInfo]
 }
 
+public func markStaleIfNeeded(_ device: DeviceBatteryInfo, now: Date, threshold: TimeInterval = 120) -> DeviceBatteryInfo {
+    guard !device.stale, now.timeIntervalSince(device.lastUpdated) > threshold else {
+        return device
+    }
+    return DeviceBatteryInfo(
+        id: device.id,
+        name: device.name,
+        kind: device.kind,
+        percentage: device.percentage,
+        isCharging: device.isCharging,
+        lastUpdated: device.lastUpdated,
+        stale: true
+    )
+}
+
 public actor DeviceRegistry {
     private let sources: [BatteryDataSource]
     private var cache: [String: DeviceBatteryInfo] = [:]
@@ -30,6 +45,7 @@ public actor DeviceRegistry {
     }
 
     public func listKnownDevices() async -> [DeviceBatteryInfo] {
-        Array(cache.values)
+        let now = Date()
+        return cache.values.map { markStaleIfNeeded($0, now: now) }
     }
 }

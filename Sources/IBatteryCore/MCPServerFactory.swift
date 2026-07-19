@@ -47,7 +47,12 @@ public func makeServer(registry: DeviceRegistry) async -> Server {
         switch params.name {
         case "get_all_devices_status":
             let devices = await registry.getAllDevicesStatus()
-            return .init(content: [.text(text: encodeDevicesAsText(devices), annotations: nil, _meta: nil)], isError: false)
+            var content: [Tool.Content] = [.text(text: encodeDevicesAsText(devices), annotations: nil, _meta: nil)]
+            let canConnectToHelper = BLEBatterySource.canReachHelper()
+            if let warning = bleHelperUnreachableWarning(canConnect: canConnectToHelper) {
+                content.append(.text(text: warning, annotations: nil, _meta: nil))
+            }
+            return .init(content: content, isError: false)
 
         case "get_device_battery":
             guard let query = params.arguments?["query"]?.stringValue else {
