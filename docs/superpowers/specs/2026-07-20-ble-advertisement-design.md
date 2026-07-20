@@ -98,8 +98,10 @@ endian company ID `4c 00`.
 **"Open" message** (29 bytes, `data[2] == 0x07`; broadcast continuously
 while the lid is open or buds are in use):
 
-- `data[5..6]`: model ID (little-endian pairs, e.g. `0x2214` = AirPods
-  Pro 2) — used only for display/model classification, never as a gate.
+- `data[5..6]`: model ID, matched as the hex pair `data[6] data[5]`
+  (e.g. `data[5]=0x20, data[6]=0x14` → "1420" = AirPods Pro 2, per
+  AirBattery's published table) — used only for display/model
+  classification, never as a gate.
 - `data[7]` low nibble: coarse in-case state — `5` = both buds in case,
   `1` = at least one bud out.
 - `data[7]` high nibble bit `0x02` (AirBattery's "flip" bit): when unset,
@@ -150,12 +152,16 @@ which is identical on both paths (BLE `peripheral.name` vs
 `system_profiler`'s entry key — AirPods' BLE MAC is randomized, so the name
 is the only stable cross-path key). Per component (left/right/case):
 
-1. BLE cache has a fresher value → use BLE values (level, charging,
-   inCase/lidOpen); `lastUpdated` = advertisement last-seen time.
-2. BLE silent (e.g. lid closed a while ago — AirPods stop advertising) →
-   `system_profiler` cached level, `isCharging: nil`, but `inCase`/`lidOpen`
-   retain the monitor's last-known state with the honest last-seen
-   timestamp; the registry's existing `stale` mechanism applies unchanged.
+1. BLE cache entry seen within the last 10 minutes ("fresh" — a constant,
+   not config) → use BLE values (level, charging, inCase/lidOpen);
+   `lastUpdated` = advertisement last-seen time. (`system_profiler` values
+   carry no timestamp at all, so recency comparison against them is
+   impossible — the fixed window is the honest substitute.)
+2. BLE silent or older than the window (e.g. lid closed a while ago —
+   AirPods stop advertising) → `system_profiler` cached level,
+   `isCharging: nil`, but `inCase`/`lidOpen` retain the monitor's
+   last-known state with the honest last-seen timestamp; the registry's
+   existing `stale` mechanism applies unchanged.
 3. `id` keeps the `system_profiler` MAC-derived form
    (`<address>-left/-right/-case`) when available, since it is stable;
    BLE-only devices (never seen by `system_profiler`) fall back to
