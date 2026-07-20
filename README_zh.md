@@ -20,7 +20,7 @@
 | iPhone / iPad | ✅ 已在真机上验证 |
 | Apple Watch（通过配对的 iPhone） | ✅ 已在真机上验证 |
 | AirPods | ⚠️ 已实现、有单元测试 — 但还没有在真实硬件上验证过 |
-| 局域网内其他 Mac | 🚧 尚未实现（计划中） |
+| 局域网内其他 Mac | ❌ 不做了 —— 见下方[为什么不做局域网内其他 Mac？](#为什么不做局域网内其他-mac) |
 
 本项目仍处于 1.0 之前的活跃开发阶段，详见 [CHANGELOG.md](./CHANGELOG.md)。
 
@@ -34,6 +34,19 @@ Desktop 等）直接 fork 出来的子进程——从来不是通过 macOS 的 L
 小的伴生 App，`ibattery-ble-helper`，专门持有所有蓝牙访问权限，用正常方式启动
 （`open`，或设成登录项）；无状态的 MCP server 通过本地 Unix socket 跟它通信。
 完整来龙去脉见[设计文档](./docs/superpowers/specs/2026-07-19-ibattery-mcp-design.md)。
+
+## 为什么不做局域网内其他 Mac？
+
+跟 iPhone/iPad、Apple Watch、AirPods 不一样——那几个功能之所以能做，是因为
+macOS/iOS 本来就已经在悄悄收集、同步这份数据了（lockdownd 的配对关系，或者
+iCloud 密钥同步让这台 Mac 自己的蓝牙栈提前知道），本项目只是把已经存在的数据
+读出来。但另一台 Mac 的电量没有这样一条现成通道——Find My 虽然能看到，但走的
+是封闭的 iCloud 云端路径，没有任何本地或可脚本调用的接口。真要看到另一台 Mac
+的状态，需要在**每一台**相关的 Mac 上都跑一个自建的点对点 App，大概率还会撞上
+和蓝牙一样的局域网权限"责任进程"问题——意味着要再建一个常驻辅助 App、自己设计
+发现和认证机制，而且没有任何官方通道可以借力。设计阶段权衡这个代价之后，主动
+决定不做这个功能。完整推理过程见
+[设计文档](./docs/superpowers/specs/2026-07-20-lan-multi-mac-design.md)。
 
 ## 安装
 

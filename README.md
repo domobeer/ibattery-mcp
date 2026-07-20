@@ -21,7 +21,7 @@ or any other MCP client) can call.
 | iPhone / iPad | ✅ Verified against a real device |
 | Apple Watch (via a paired iPhone) | ✅ Verified against real hardware |
 | AirPods | ⚠️ Implemented, unit-tested — not yet confirmed against real hardware |
-| Another Mac on the same network | 🚧 Not implemented yet (planned) |
+| Another Mac on the same network | ❌ Not planned — see [Why not another Mac?](#why-not-another-mac) below |
 
 This project is pre-1.0 and under active development. See
 [CHANGELOG.md](./CHANGELOG.md) for details.
@@ -39,6 +39,23 @@ works around this the same way a normal Mac app would: a small companion app,
 (`open`, or as a login item); the stateless MCP server talks to it over a
 local Unix domain socket. See the [design doc](./docs/superpowers/specs/2026-07-19-ibattery-mcp-design.md)
 for the full story, including how this was discovered.
+
+## Why not another Mac?
+
+Unlike iPhone/iPad, Apple Watch, and AirPods — where macOS or iOS already
+silently collects and syncs the battery data somewhere (lockdownd's
+pairing relationship, iCloud key-sharing feeding this Mac's own Bluetooth
+stack) and this project just reads it — there's no equivalent built-in
+channel for another Mac's battery. Find My can show it, but only via a
+closed, cloud-based path with no local or scriptable access. Seeing
+another Mac's status genuinely requires a custom peer-to-peer app running
+on *every* Mac involved, likely gated behind macOS's Local Network
+permission the same way Bluetooth is gated behind its own responsible-
+process rule — a second persistent helper, its own discovery/auth design,
+with no official API to lean on. Weighed against that cost during design,
+this was deliberately not pursued. See the
+[design doc](./docs/superpowers/specs/2026-07-20-lan-multi-mac-design.md)
+for the full reasoning.
 
 ## Installation
 

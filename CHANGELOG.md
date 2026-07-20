@@ -42,5 +42,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   so the capacity value was silently misread as 0. Both are fixed.
 
 ### Known limitations
-- Querying another Mac's devices over the local network (LAN multi-Mac) is not
-  yet implemented.
+- Querying another Mac's devices over the local network (LAN multi-Mac) is
+  **not planned**. Unlike every other source in this project, there's no
+  existing macOS/iCloud channel that already syncs this data — it would
+  require a second custom peer-to-peer helper app running on every Mac
+  involved, most likely gated behind the same kind of Local Network
+  permission wall Bluetooth already needed a helper for, with no official
+  API to lean on. Weighed against that cost during design and deliberately
+  not pursued — see the
+  [design doc](./docs/superpowers/specs/2026-07-20-lan-multi-mac-design.md).
