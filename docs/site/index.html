@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ibattery-mcp — battery status for every Apple device, for your AI</title>
+<meta name="description" content="An MCP server that exposes Mac, iPhone, iPad, Apple Watch, and Bluetooth battery status as tools an AI assistant can call.">
+<meta property="og:title" content="ibattery-mcp">
+<meta property="og:description" content="Give your AI assistant a readout on every battery you own.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://china-drummond.github.io/ibattery-mcp/">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect x='3' y='7' width='16' height='10' rx='2' fill='%23FF9F0A'/%3E%3Cpath d='M20 10v4' stroke='%23FF9F0A' stroke-width='2'/%3E%3C/svg%3E">
+<style>
+  :root {
+    --bg: #F7F3EA;
+    --surface: #FFFFFF;
+    --surface-2: #EFE9DB;
+    --border: #DED5C0;
+    --text: #211D17;
+    --text-dim: #6B6152;
+    --accent: #B5650A;
+    --accent-strong: #8F4E07;
+    --good: #1F7A34;
+    --caution: #9A5B00;
+    --pending: #8A8071;
+    --mono: ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    --radius: 10px;
+    --shadow: 0 1px 2px rgba(33,29,23,0.06), 0 8px 24px -12px rgba(33,29,23,0.18);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1A1815;
+      --surface: #242019;
+      --surface-2: #2C2720;
+      --border: #3A342A;
+      --text: #F3EFE7;
+      --text-dim: #A89E8C;
+      --accent: #FF9F0A;
+      --accent-strong: #FFB33F;
+      --good: #32D74B;
+      --caution: #FFB340;
+      --pending: #857C6C;
+      --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 12px 32px -14px rgba(0,0,0,0.55);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #1A1815; --surface: #242019; --surface-2: #2C2720; --border: #3A342A;
+    --text: #F3EFE7; --text-dim: #A89E8C; --accent: #FF9F0A; --accent-strong: #FFB33F;
+    --good: #32D74B; --caution: #FFB340; --pending: #857C6C;
+    --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 12px 32px -14px rgba(0,0,0,0.55);
+  }
+  :root[data-theme="light"] {
+    --bg: #F7F3EA; --surface: #FFFFFF; --surface-2: #EFE9DB; --border: #DED5C0;
+    --text: #211D17; --text-dim: #6B6152; --accent: #B5650A; --accent-strong: #8F4E07;
+    --good: #1F7A34; --caution: #9A5B00; --pending: #8A8071;
+    --shadow: 0 1px 2px rgba(33,29,23,0.06), 0 8px 24px -12px rgba(33,29,23,0.18);
+  }
+
+  * { box-sizing: border-box; }
+  html { background: var(--bg); }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    * { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; }
+  }
+
+  a { color: inherit; }
+  .wrap { max-width: 1040px; margin: 0 auto; padding: 0 28px; }
+
+  /* ---------- top bar ---------- */
+  .topbar {
+    position: sticky; top: 0; z-index: 20;
+    background: color-mix(in srgb, var(--bg) 88%, transparent);
+    backdrop-filter: blur(10px) saturate(140%);
+    border-bottom: 1px solid var(--border);
+  }
+  .topbar-inner {
+    max-width: 1040px; margin: 0 auto; padding: 14px 28px;
+    display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  }
+  .brand {
+    display: flex; align-items: center; gap: 10px;
+    font-family: var(--mono); font-weight: 600; font-size: 15px; letter-spacing: -0.01em;
+    text-decoration: none; color: var(--text);
+  }
+  .brand-glyph {
+    width: 22px; height: 22px; border-radius: 5px;
+    background: linear-gradient(160deg, var(--accent), var(--accent-strong));
+    display: grid; place-items: center; flex: none;
+  }
+  .brand-glyph svg { width: 13px; height: 13px; }
+  .topnav { display: flex; align-items: center; gap: 22px; }
+  .topnav a {
+    font-size: 14px; color: var(--text-dim); text-decoration: none; white-space: nowrap;
+  }
+  .topnav a:hover { color: var(--text); }
+  .icon-btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--border);
+    background: var(--surface); color: var(--text-dim); cursor: pointer;
+    font-family: var(--mono); font-size: 12px; font-weight: 600;
+  }
+  .icon-btn:hover { color: var(--text); border-color: var(--accent); }
+  .icon-btn:focus-visible, a:focus-visible, button:focus-visible {
+    outline: 2px solid var(--accent); outline-offset: 2px;
+  }
+
+  /* ---------- hero ---------- */
+  .hero { padding: 76px 0 64px; }
+  .eyebrow {
+    font-family: var(--mono); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--accent); margin: 0 0 18px; display: flex; align-items: center; gap: 8px;
+  }
+  .eyebrow::before {
+    content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--good);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--good) 25%, transparent);
+  }
+  h1.headline {
+    font-size: clamp(34px, 5.4vw, 58px);
+    line-height: 1.05; letter-spacing: -0.02em; font-weight: 700;
+    margin: 0 0 22px; max-width: 15ch; text-wrap: balance;
+  }
+  h1.headline .accent-word { color: var(--accent); }
+  .sub {
+    font-size: 18px; color: var(--text-dim); max-width: 54ch; margin: 0 0 34px;
+  }
+  .hero-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 46px; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 11px 18px; border-radius: 8px; font-size: 14.5px; font-weight: 600;
+    text-decoration: none; border: 1px solid transparent; cursor: pointer;
+  }
+  .btn-primary { background: var(--text); color: var(--bg); }
+  .btn-primary:hover { background: var(--accent-strong); color: #1A1815; }
+  .btn-ghost { background: var(--surface); color: var(--text); border-color: var(--border); }
+  .btn-ghost:hover { border-color: var(--accent); }
+
+  .install {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    box-shadow: var(--shadow); overflow: hidden; max-width: 640px;
+  }
+  .install-bar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 9px 14px; border-bottom: 1px solid var(--border);
+    font-family: var(--mono); font-size: 12px; color: var(--text-dim);
+  }
+  .copy-btn {
+    background: none; border: 1px solid var(--border); color: var(--text-dim);
+    border-radius: 6px; padding: 4px 9px; font-family: var(--mono); font-size: 11.5px; cursor: pointer;
+  }
+  .copy-btn:hover { color: var(--text); border-color: var(--accent); }
+  .copy-btn.copied { color: var(--good); border-color: var(--good); }
+  .install pre {
+    margin: 0; padding: 16px 18px; font-family: var(--mono); font-size: 14px;
+    overflow-x: auto; color: var(--text);
+  }
+  .install .tok-cmd { color: var(--accent); }
+  .install .tok-dim { color: var(--text-dim); }
+
+  /* ---------- device gauge board ---------- */
+  .board {
+    margin-top: 54px; background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden;
+  }
+  .board-head {
+    padding: 12px 18px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .board-head .name { font-family: var(--mono); font-size: 12.5px; color: var(--text-dim); }
+  .board-head .name b { color: var(--text); }
+  .device-row {
+    display: grid; grid-template-columns: 22px 1fr 120px 46px; align-items: center;
+    gap: 14px; padding: 13px 18px; border-bottom: 1px solid var(--border);
+  }
+  .device-row:last-child { border-bottom: none; }
+  .device-row svg { width: 18px; height: 18px; color: var(--text-dim); flex: none; }
+  .device-name { font-size: 14.5px; }
+  .device-name .sub-label { display: block; font-size: 12px; color: var(--text-dim); margin-top: 1px; }
+  .gauge-track {
+    height: 8px; border-radius: 5px; background: var(--surface-2); overflow: hidden;
+    border: 1px solid var(--border);
+  }
+  .gauge-fill {
+    height: 100%; border-radius: 5px; width: 0%;
+    transition: width 1.1s cubic-bezier(.16,.9,.3,1);
+    background: linear-gradient(90deg, var(--accent), var(--good));
+  }
+  .pct {
+    font-family: var(--mono); font-variant-numeric: tabular-nums; font-size: 13.5px;
+    text-align: right; color: var(--text-dim); font-weight: 600;
+  }
+
+  /* ---------- generic sections ---------- */
+  section { padding: 72px 0; border-top: 1px solid var(--border); }
+  .section-head { max-width: 640px; margin: 0 0 40px; }
+  .section-kicker {
+    font-family: var(--mono); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--text-dim); margin: 0 0 10px;
+  }
+  h2 {
+    font-size: clamp(24px, 3.2vw, 32px); letter-spacing: -0.015em; margin: 0 0 14px; text-wrap: balance;
+  }
+  .section-lede { color: var(--text-dim); font-size: 16px; max-width: 60ch; }
+
+  /* ---------- architecture ---------- */
+  .arch {
+    display: grid; grid-template-columns: 1fr auto 1fr; gap: 0; align-items: stretch;
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    box-shadow: var(--shadow); overflow: hidden;
+  }
+  .arch-panel { padding: 26px 24px; display: flex; flex-direction: column; gap: 10px; }
+  .arch-panel.host { background: var(--surface); }
+  .arch-panel.helper { background: var(--surface-2); }
+  .arch-tag {
+    font-family: var(--mono); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase;
+    color: var(--text-dim);
+  }
+  .arch-title { font-size: 16.5px; font-weight: 700; }
+  .arch-desc { font-size: 13.5px; color: var(--text-dim); }
+  .arch-badge {
+    align-self: flex-start; font-family: var(--mono); font-size: 11px; padding: 3px 8px;
+    border-radius: 5px; border: 1px solid var(--border); color: var(--text-dim); margin-top: 6px;
+  }
+  .arch-link {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 6px; padding: 0 14px; border-left: 1px dashed var(--border); border-right: 1px dashed var(--border);
+    background: var(--bg);
+  }
+  .arch-link svg { width: 26px; height: 26px; color: var(--accent); }
+  .arch-link .lbl {
+    font-family: var(--mono); font-size: 9.5px; color: var(--text-dim); text-align: center;
+    letter-spacing: 0.03em; text-transform: uppercase; max-width: 90px;
+  }
+  @media (max-width: 720px) {
+    .arch { grid-template-columns: 1fr; }
+    .arch-link { border-left: none; border-right: none; border-top: 1px dashed var(--border); border-bottom: 1px dashed var(--border); flex-direction: row; padding: 12px; }
+  }
+
+  /* ---------- code demo ---------- */
+  .code-demo {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 20px;
+  }
+  @media (max-width: 780px) { .code-demo { grid-template-columns: 1fr; } }
+  .panel {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    box-shadow: var(--shadow); overflow: hidden; display: flex; flex-direction: column;
+  }
+  .panel-head {
+    padding: 10px 16px; border-bottom: 1px solid var(--border);
+    font-family: var(--mono); font-size: 11.5px; color: var(--text-dim);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .dot-row { display: flex; gap: 5px; }
+  .dot-row span { width: 8px; height: 8px; border-radius: 50%; background: var(--border); }
+  .panel pre {
+    margin: 0; padding: 18px; font-family: var(--mono); font-size: 12.8px; line-height: 1.6;
+    overflow-x: auto; flex: 1; white-space: pre;
+  }
+  .json-key { color: var(--accent); }
+  .json-str { color: var(--good); }
+  .json-num { color: var(--text); font-weight: 600; }
+  .json-punc { color: var(--text-dim); }
+  .chat-bubble {
+    margin: 16px; padding: 14px 16px; border-radius: 10px; background: var(--surface-2);
+    border: 1px solid var(--border); font-size: 13.5px; line-height: 1.55;
+  }
+  .chat-avatar {
+    display: inline-flex; align-items: center; gap: 7px; font-family: var(--mono);
+    font-size: 11px; color: var(--text-dim); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.04em;
+  }
+
+  /* ---------- footer ---------- */
+  footer { padding: 40px 0 60px; }
+  .footer-row {
+    display: flex; flex-wrap: wrap; justify-content: space-between; gap: 18px;
+    font-size: 13.5px; color: var(--text-dim);
+  }
+  .footer-row a { text-decoration: none; }
+  .footer-row a:hover { color: var(--accent); }
+  .footer-links { display: flex; gap: 18px; flex-wrap: wrap; }
+
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="#top">
+      <span class="brand-glyph">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M4 8a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8Z" stroke="#1A1815" stroke-width="1.6"/><path d="M18 10h1.5a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1H18" stroke="#1A1815" stroke-width="1.6"/><path d="M9.5 7.5 7 12.2h2.4L8 16.5l4.6-5.4H10L12 7.5H9.5Z" fill="#1A1815"/></svg>
+      </span>
+      ibattery-mcp
+    </a>
+    <nav class="topnav">
+      <a href="#how" data-lang="en">How it works</a>
+      <a href="#how" data-lang="zh" style="display:none">工作原理</a>
+      <a href="#tools" data-lang="en">Tools</a>
+      <a href="#tools" data-lang="zh" style="display:none">工具</a>
+      <a href="#devices" data-lang="en">Devices</a>
+      <a href="#devices" data-lang="zh" style="display:none">设备</a>
+      <a href="https://github.com/China-Drummond/ibattery-mcp">GitHub</a>
+      <button class="icon-btn" id="theme-toggle" aria-label="Toggle color theme" title="Toggle theme">&#9680;</button>
+      <button class="icon-btn" id="lang-toggle" aria-label="Toggle language" title="中文 / English">EN</button>
+    </nav>
+  </div>
+</div>
+
+<main id="top">
+  <div class="wrap">
+    <section class="hero" style="border-top:none;padding-top:64px;">
+      <p class="eyebrow" data-lang="en">Model Context Protocol server &middot; macOS</p>
+      <p class="eyebrow" data-lang="zh" style="display:none">Model Context Protocol 服务器 · macOS</p>
+
+      <h1 class="headline" data-lang="en">
+        Give your AI assistant a readout on <span class="accent-word">every battery you own</span>.
+      </h1>
+      <h1 class="headline" data-lang="zh" style="display:none">
+        让你的 AI 助手看到<span class="accent-word">你所有设备的电量</span>。
+      </h1>
+
+      <p class="sub" data-lang="en">
+        ibattery-mcp is an MCP server that reads battery and charging status from
+        your Mac, Bluetooth accessories, iPhone/iPad, and Apple Watch — so
+        Claude Code, Claude Desktop, or Work Buddy can just tell you, every morning,
+        what needs plugging in.
+      </p>
+      <p class="sub" data-lang="zh" style="display:none">
+        ibattery-mcp 是一个 MCP 服务器，能读取 Mac 本机、蓝牙外设、iPhone/iPad、Apple Watch
+        的电量与充电状态——这样 Claude Code、Claude Desktop 或 Work Buddy
+        每天早上就能直接告诉你，哪个设备该充电了。
+      </p>
+
+      <div class="hero-actions">
+        <a class="btn btn-primary" href="https://github.com/China-Drummond/ibattery-mcp#installation" data-lang="en">Get started</a>
+        <a class="btn btn-primary" href="https://github.com/China-Drummond/ibattery-mcp#installation" data-lang="zh" style="display:none">快速开始</a>
+        <a class="btn btn-ghost" href="https://github.com/China-Drummond/ibattery-mcp">View source</a>
+      </div>
+
+      <div class="install">
+        <div class="install-bar">
+          <span data-lang="en">terminal</span>
+          <span data-lang="zh" style="display:none">终端</span>
+          <button class="copy-btn" id="copy-install">
+            <span data-lang="en">Copy</span><span data-lang="zh" style="display:none">复制</span>
+          </button>
+        </div>
+        <pre id="install-cmd"><span class="tok-dim">$</span> <span class="tok-cmd">brew install</span> China-Drummond/tap/ibattery-mcp</pre>
+      </div>
+
+      <div class="board" aria-hidden="true">
+        <div class="board-head">
+          <span class="name" data-lang="en">get_all_devices_status<span style="color:var(--text-dim)">()</span> <b>&rarr; live</b></span>
+          <span class="name" data-lang="zh" style="display:none">get_all_devices_status<span style="color:var(--text-dim)">()</span> <b>&rarr; 实时</b></span>
+        </div>
+        <div class="device-row">
+          <svg viewBox="0 0 24 24" fill="none"><rect x="3" y="7" width="16" height="10" rx="2" stroke="currentColor" stroke-width="1.6"/><path d="M20 10v4" stroke="currentColor" stroke-width="1.6"/></svg>
+          <span class="device-name">MacBook Pro</span>
+          <div class="gauge-track"><div class="gauge-fill" data-pct="87"></div></div>
+          <span class="pct">87%</span>
+        </div>
+        <div class="device-row">
+          <svg viewBox="0 0 24 24" fill="none"><rect x="7" y="2" width="10" height="20" rx="2.5" stroke="currentColor" stroke-width="1.6"/></svg>
+          <span class="device-name">iPhone 17</span>
+          <div class="gauge-track"><div class="gauge-fill" data-pct="48"></div></div>
+          <span class="pct">48%</span>
+        </div>
+        <div class="device-row">
+          <svg viewBox="0 0 24 24" fill="none"><rect x="7" y="4" width="10" height="14" rx="3" stroke="currentColor" stroke-width="1.6"/><path d="M10 2.5h4" stroke="currentColor" stroke-width="1.6"/></svg>
+          <span class="device-name">Apple Watch</span>
+          <div class="gauge-track"><div class="gauge-fill" data-pct="66"></div></div>
+          <span class="pct">66%</span>
+        </div>
+        <div class="device-row">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M6 4a3 3 0 0 1 3 3v6a3 3 0 1 1-3 3V4Z" stroke="currentColor" stroke-width="1.6"/><path d="M18 4a3 3 0 0 0-3 3v6a3 3 0 1 0 3 3V4Z" stroke="currentColor" stroke-width="1.6"/></svg>
+          <span class="device-name">AirPods 4 <span class="sub-label" data-lang="en">roadmap — not yet supported</span><span class="sub-label" data-lang="zh" style="display:none">规划中，尚未支持</span></span>
+          <div class="gauge-track"><div class="gauge-fill" data-pct="0" style="background:var(--pending)"></div></div>
+          <span class="pct" style="color:var(--pending)">&mdash;</span>
+        </div>
+      </div>
+    </section>
+
+    <section id="how">
+      <div class="section-head">
+        <p class="section-kicker" data-lang="en">Why two processes?</p>
+        <p class="section-kicker" data-lang="zh" style="display:none">为什么是两个进程？</p>
+        <h2 data-lang="en">macOS won't let a bare MCP server touch Bluetooth.</h2>
+        <h2 data-lang="zh" style="display:none">macOS 不允许裸的 MCP 进程碰蓝牙。</h2>
+        <p class="section-lede" data-lang="en">
+          macOS attributes Bluetooth's privacy check to whichever process is
+          "responsible" for launching yours — never the MCP subprocess itself,
+          since it's spawned directly by its host, not opened normally. So a
+          small companion app owns Bluetooth instead, and the stateless MCP
+          server just asks it questions over a local socket.
+        </p>
+        <p class="section-lede" data-lang="zh" style="display:none">
+          macOS 会把蓝牙隐私检查的责任归到启动你的那个"负责进程"身上——而 MCP
+          子进程从来都不是这个"负责进程"，因为它是被宿主直接拉起来的，不是正常打开的。
+          所以蓝牙访问权限交给一个独立的小型伴生 App 持有，无状态的 MCP
+          server 只通过本地 socket 向它提问。
+        </p>
+      </div>
+      <div class="arch">
+        <div class="arch-panel host">
+          <span class="arch-tag" data-lang="en">Spawned per request</span>
+          <span class="arch-tag" data-lang="zh" style="display:none">按需启动</span>
+          <span class="arch-title">ibattery-mcp</span>
+          <span class="arch-desc" data-lang="en">Stateless MCP server. Reads Mac/iPhone/Watch battery directly; asks the helper for Bluetooth.</span>
+          <span class="arch-desc" data-lang="zh" style="display:none">无状态 MCP server。直接读取 Mac/iPhone/Watch 电量；蓝牙数据向辅助 App 请求。</span>
+          <span class="arch-badge">stdio &middot; JSON-RPC</span>
+        </div>
+        <div class="arch-link">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M4 12h16m0 0-5-5m5 5-5 5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span class="lbl" data-lang="en">Unix socket</span>
+          <span class="lbl" data-lang="zh" style="display:none">Unix Socket</span>
+        </div>
+        <div class="arch-panel helper">
+          <span class="arch-tag" data-lang="en">Runs continuously</span>
+          <span class="arch-tag" data-lang="zh" style="display:none">常驻运行</span>
+          <span class="arch-title">ibattery-ble-helper</span>
+          <span class="arch-desc" data-lang="en">A real, launched app. Owns CoreBluetooth access and answers scan requests.</span>
+          <span class="arch-desc" data-lang="zh" style="display:none">一个真正被"打开"的 App。持有 CoreBluetooth 访问权限，负责应答扫描请求。</span>
+          <span class="arch-badge">launched via open</span>
+        </div>
+      </div>
+    </section>
+
+    <section id="tools">
+      <div class="section-head">
+        <p class="section-kicker" data-lang="en">Three tools, one purpose</p>
+        <p class="section-kicker" data-lang="zh" style="display:none">三个工具，一个目的</p>
+        <h2 data-lang="en">Ask a normal question, get a structured answer.</h2>
+        <h2 data-lang="zh" style="display:none">问一个平常的问题，拿到一个结构化的答案。</h2>
+        <p class="section-lede" data-lang="en">
+          <code style="font-family:var(--mono)">get_all_devices_status()</code> is
+          what a morning-briefing skill calls — everything, in one round trip.
+        </p>
+        <p class="section-lede" data-lang="zh" style="display:none">
+          晨间简报之类的场景直接调 <code style="font-family:var(--mono)">get_all_devices_status()</code>——
+          一次调用拿到所有设备。
+        </p>
+      </div>
+      <div class="code-demo">
+        <div class="panel">
+          <div class="panel-head"><span class="dot-row"><span></span><span></span><span></span></span>tools/call &rarr; get_all_devices_status</div>
+          <pre><span class="json-punc">[</span>
+  <span class="json-punc">{</span>
+    <span class="json-key">"name"</span><span class="json-punc">:</span> <span class="json-str">"MacBook Pro"</span><span class="json-punc">,</span>
+    <span class="json-key">"kind"</span><span class="json-punc">:</span> <span class="json-str">"mac"</span><span class="json-punc">,</span>
+    <span class="json-key">"percentage"</span><span class="json-punc">:</span> <span class="json-num">87</span><span class="json-punc">,</span>
+    <span class="json-key">"isCharging"</span><span class="json-punc">:</span> <span class="json-num">true</span>
+  <span class="json-punc">},</span>
+  <span class="json-punc">{</span>
+    <span class="json-key">"name"</span><span class="json-punc">:</span> <span class="json-str">"iPhone 17"</span><span class="json-punc">,</span>
+    <span class="json-key">"kind"</span><span class="json-punc">:</span> <span class="json-str">"iosDevice"</span><span class="json-punc">,</span>
+    <span class="json-key">"percentage"</span><span class="json-punc">:</span> <span class="json-num">48</span><span class="json-punc">,</span>
+    <span class="json-key">"isCharging"</span><span class="json-punc">:</span> <span class="json-num">false</span>
+  <span class="json-punc">}</span>
+  <span class="json-punc" style="opacity:.5">// …Apple Watch, Bluetooth devices</span>
+<span class="json-punc">]</span></pre>
+        </div>
+        <div class="panel">
+          <div class="panel-head"><span class="dot-row"><span></span><span></span><span></span></span><span data-lang="en">what the assistant says back</span><span data-lang="zh" style="display:none">助手回复给你的话</span></div>
+          <div class="chat-bubble">
+            <span class="chat-avatar" data-lang="en">Morning briefing</span>
+            <span class="chat-avatar" data-lang="zh" style="display:none">晨间简报</span>
+            <span data-lang="en">Your iPhone is at 48% and not charging — might want to plug it in before you head out. Everything else looks fine: MacBook 87% and charging, Watch 66%.</span>
+            <span data-lang="zh" style="display:none">你的 iPhone 还剩 48%，没在充电——出门前建议充一下。其他都还好：MacBook 87% 正在充电，Watch 66%。</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="devices">
+      <div class="section-head">
+        <p class="section-kicker" data-lang="en">Honest status</p>
+        <p class="section-kicker" data-lang="zh" style="display:none">诚实的状态</p>
+        <h2 data-lang="en">What's actually done, not what sounds done.</h2>
+        <h2 data-lang="zh" style="display:none">写实际做到的，不写听起来做到的。</h2>
+        <p class="section-lede" data-lang="en">This project is pre-1.0. Every row below means exactly what it says.</p>
+        <p class="section-lede" data-lang="zh" style="display:none">项目还在 1.0 之前。下面每一行都是字面意思，不夸大。</p>
+      </div>
+      <div class="board">
+        <div class="device-row" style="grid-template-columns: 1fr auto;">
+          <span class="device-name" data-lang="en">This Mac's own battery</span>
+          <span class="device-name" data-lang="zh" style="display:none">Mac 本机电量</span>
+          <span class="pct" style="color:var(--caution)">&#9679; <span data-lang="en">tested, unverified on hardware</span><span data-lang="zh" style="display:none">已测试，未在真机验证</span></span>
+        </div>
+        <div class="device-row" style="grid-template-columns: 1fr auto;">
+          <span class="device-name" data-lang="en">Generic Bluetooth devices</span>
+          <span class="device-name" data-lang="zh" style="display:none">通用蓝牙设备</span>
+          <span class="pct" style="color:var(--caution)">&#9679; <span data-lang="en">tested, unverified on hardware</span><span data-lang="zh" style="display:none">已测试，未在真机验证</span></span>
+        </div>
+        <div class="device-row" style="grid-template-columns: 1fr auto;">
+          <span class="device-name" data-lang="en">iPhone / iPad</span>
+          <span class="device-name" data-lang="zh" style="display:none">iPhone / iPad</span>
+          <span class="pct" style="color:var(--caution)">&#9679; <span data-lang="en">tested, unverified on hardware</span><span data-lang="zh" style="display:none">已测试，未在真机验证</span></span>
+        </div>
+        <div class="device-row" style="grid-template-columns: 1fr auto;">
+          <span class="device-name" data-lang="en">Apple Watch (via paired iPhone)</span>
+          <span class="device-name" data-lang="zh" style="display:none">Apple Watch（通过配对 iPhone）</span>
+          <span class="pct" style="color:var(--caution)">&#9679; <span data-lang="en">tested, unverified on hardware</span><span data-lang="zh" style="display:none">已测试，未在真机验证</span></span>
+        </div>
+        <div class="device-row" style="grid-template-columns: 1fr auto;">
+          <span class="device-name" data-lang="en">AirPods</span>
+          <span class="device-name" data-lang="zh" style="display:none">AirPods</span>
+          <span class="pct" style="color:var(--pending)">&#9675; <span data-lang="en">roadmap</span><span data-lang="zh" style="display:none">规划中</span></span>
+        </div>
+        <div class="device-row" style="grid-template-columns: 1fr auto;">
+          <span class="device-name" data-lang="en">Another Mac on the same network</span>
+          <span class="device-name" data-lang="zh" style="display:none">局域网内其他 Mac</span>
+          <span class="pct" style="color:var(--pending)">&#9675; <span data-lang="en">roadmap</span><span data-lang="zh" style="display:none">规划中</span></span>
+        </div>
+      </div>
+    </section>
+  </div>
+</main>
+
+<footer>
+  <div class="wrap footer-row">
+    <span data-lang="en">MIT licensed. Independent, clean-room implementation — no code shared with AirBattery.</span>
+    <span data-lang="zh" style="display:none">MIT 许可证。独立干净重写实现——不与 AirBattery 共享任何代码。</span>
+    <span class="footer-links">
+      <a href="https://github.com/China-Drummond/ibattery-mcp">GitHub</a>
+      <a href="https://github.com/China-Drummond/ibattery-mcp/blob/main/README_zh.md" data-lang="en">中文</a>
+      <a href="https://github.com/China-Drummond/ibattery-mcp/blob/main/README.md" data-lang="zh" style="display:none">English</a>
+      <a href="https://modelcontextprotocol.io">Model Context Protocol</a>
+    </span>
+  </div>
+</footer>
+
+<script>
+(function () {
+  var root = document.documentElement;
+
+  var themeBtn = document.getElementById('theme-toggle');
+  var saved = localStorage.getItem('ibattery-theme');
+  if (saved) root.setAttribute('data-theme', saved);
+  themeBtn.addEventListener('click', function () {
+    var current = root.getAttribute('data-theme');
+    var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    var isDark = current ? current === 'dark' : prefersDark;
+    var next = isDark ? 'light' : 'dark';
+    root.setAttribute('data-theme', next);
+    localStorage.setItem('ibattery-theme', next);
+  });
+
+  var langBtn = document.getElementById('lang-toggle');
+  var langEls = document.querySelectorAll('[data-lang]');
+  function setLang(lang) {
+    root.setAttribute('data-lang', lang);
+    langEls.forEach(function (el) {
+      el.style.display = el.getAttribute('data-lang') === lang ? '' : 'none';
+    });
+    langBtn.textContent = lang === 'en' ? 'EN' : '中';
+    document.documentElement.lang = lang === 'en' ? 'en' : 'zh-CN';
+    localStorage.setItem('ibattery-lang', lang);
+  }
+  var savedLang = localStorage.getItem('ibattery-lang') ||
+    (navigator.language && navigator.language.toLowerCase().indexOf('zh') === 0 ? 'zh' : 'en');
+  setLang(savedLang);
+  langBtn.addEventListener('click', function () {
+    setLang(root.getAttribute('data-lang') === 'zh' ? 'en' : 'zh');
+  });
+
+  var copyBtn = document.getElementById('copy-install');
+  copyBtn.addEventListener('click', function () {
+    var text = 'brew install China-Drummond/tap/ibattery-mcp';
+    navigator.clipboard.writeText(text).then(function () {
+      copyBtn.classList.add('copied');
+      var labels = copyBtn.querySelectorAll('span');
+      var prevEn = labels[0].textContent, prevZh = labels[1].textContent;
+      labels[0].textContent = 'Copied'; labels[1].textContent = '已复制';
+      setTimeout(function () {
+        copyBtn.classList.remove('copied');
+        labels[0].textContent = prevEn; labels[1].textContent = prevZh;
+      }, 1600);
+    });
+  });
+
+  window.requestAnimationFrame(function () {
+    setTimeout(function () {
+      document.querySelectorAll('.gauge-fill').forEach(function (el) {
+        el.style.width = el.getAttribute('data-pct') + '%';
+      });
+    }, 150);
+  });
+})();
+</script>
+</body>
+</html>
