@@ -154,19 +154,4 @@ final class IDeviceBatteryTests: XCTestCase {
         // whichever write happened last, which is inherently nondeterministic.
         XCTAssertTrue(cache.value >= 0)
     }
-
-    // MARK: - runLibimobiledeviceTool watchdog
-
-    func testRunLibimobiledeviceTool_hangingProcess_returnsPromptlyOnTimeout() {
-        let start = Date()
-        let result = runLibimobiledeviceTool("sleep", ["10"], timeoutSeconds: 0.5)
-        let elapsed = Date().timeIntervalSince(start)
-        XCTAssertNotEqual(result.exitCode, 0)
-        XCTAssertLessThan(elapsed, 5.0, "watchdog should terminate the hung process well before the full 10s sleep completes")
-    }
-
-    func testRunLibimobiledeviceTool_fastProcess_succeedsWithinTimeout() {
-        let result = runLibimobiledeviceTool("true", [], timeoutSeconds: 5.0)
-        XCTAssertEqual(result.exitCode, 0)
-    }
 }

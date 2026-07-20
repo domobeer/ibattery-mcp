@@ -63,7 +63,7 @@ final class SingleResumeGate: @unchecked Sendable {
 public struct WatchBatterySource: BatteryDataSource {
     /// Overall wall-clock deadline for a single `fetchAll()` call.
     ///
-    /// Unlike `runLibimobiledeviceTool`'s subprocess watchdog (which can
+    /// Unlike `runSubprocess`'s subprocess watchdog (which can
     /// safely `SIGKILL` a hung child), there's no safe way to cancel a live
     /// `companion_proxy` C call mid-flight from another thread — freeing an
     /// `idevice_t`/`companion_proxy_client_t` while a call using that handle
@@ -108,8 +108,8 @@ public struct WatchBatterySource: BatteryDataSource {
     /// `idevice_id -l` alone misses an iPhone reachable only over WiFi sync,
     /// which would otherwise hide its paired Watch entirely.
     private static func fetchAllBlocking() -> [DeviceBatteryInfo] {
-        let usbResult = runLibimobiledeviceTool("idevice_id", ["-l"])
-        let networkResult = runLibimobiledeviceTool("idevice_id", ["-n"])
+        let usbResult = runSubprocess("idevice_id", ["-l"])
+        let networkResult = runSubprocess("idevice_id", ["-n"])
 
         let usbUDIDs = usbResult.exitCode == 0
             ? parseDeviceIdList(String(data: usbResult.stdout, encoding: .utf8) ?? "")

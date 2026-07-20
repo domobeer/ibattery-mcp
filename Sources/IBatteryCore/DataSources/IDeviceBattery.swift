@@ -1,7 +1,4 @@
 import Foundation
-#if canImport(Darwin)
-import Darwin
-#endif
 
 public func parseDeviceIdList(_ output: String) -> [String] {
     output
@@ -29,74 +26,6 @@ public func parseDeviceNamePlist(_ data: Data) -> String? {
         return nil
     }
     return name
-}
-
-/// Default wall-clock budget for a single `runLibimobiledeviceTool` invocation.
-/// `idevice_id`/`ideviceinfo` normally return in well under a second; this
-/// leaves generous headroom for a slow-but-working call while still
-/// guaranteeing the watchdog below fires long before anyone would consider
-/// the MCP server "hung".
-let defaultLibimobiledeviceTimeoutSeconds: TimeInterval = 5.0
-
-/// Runs a libimobiledevice CLI tool (`idevice_id`, `ideviceinfo`, ...) and
-/// captures its stdout/exit code, with a wall-clock watchdog.
-///
-/// Without this watchdog, a stalled child process (untrusted-but-connected
-/// device, wedged `usbmuxd`, a WiFi-paired device dropping mid-call) would
-/// block `readDataToEndOfFile()`/`waitUntilExit()` forever, hanging the whole
-/// MCP process. That would violate the same "must never hang or crash
-/// regardless of external device/hardware flakiness" invariant that
-/// `BLEBatterySource`'s socket read-timeouts (`SO_RCVTIMEO`) already
-/// guarantee for the Bluetooth path — this brings the iOS-device path to the
-/// same standard: if the child hasn't exited within `timeoutSeconds`, it's
-/// terminated and treated as a failure (non-zero exit code) instead of
-/// hanging the caller indefinitely. A short grace period after `terminate()`
-/// escalates to `SIGKILL` in case the child ignores `SIGTERM`, so the
-/// guarantee holds even for a misbehaving binary, not just the well-behaved
-/// ones we expect in practice.
-func runLibimobiledeviceTool(
-    _ command: String,
-    _ arguments: [String],
-    timeoutSeconds: TimeInterval = defaultLibimobiledeviceTimeoutSeconds
-) -> (stdout: Data, exitCode: Int32) {
-    let process = Process()
-    process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-    process.arguments = [command] + arguments
-    let outPipe = Pipe()
-    let errPipe = Pipe()
-    process.standardOutput = outPipe
-    process.standardError = errPipe
-    do {
-        try process.run()
-    } catch {
-        return (Data(), -1)
-    }
-
-    let terminateWorkItem = DispatchWorkItem {
-        if process.isRunning {
-            process.terminate()
-        }
-    }
-    DispatchQueue.global().asyncAfter(deadline: .now() + timeoutSeconds, execute: terminateWorkItem)
-
-    // Grace period in case the child ignores SIGTERM; escalate to SIGKILL so
-    // the watchdog's guarantee holds unconditionally.
-    let killWorkItem = DispatchWorkItem {
-        if process.isRunning {
-            kill(process.processIdentifier, SIGKILL)
-        }
-    }
-    DispatchQueue.global().asyncAfter(deadline: .now() + timeoutSeconds + 2.0, execute: killWorkItem)
-
-    let errDrainThread = Thread {
-        _ = errPipe.fileHandleForReading.readDataToEndOfFile()
-    }
-    errDrainThread.start()
-    let stdoutData = outPipe.fileHandleForReading.readDataToEndOfFile()
-    process.waitUntilExit()
-    terminateWorkItem.cancel()
-    killWorkItem.cancel()
-    return (stdoutData, process.terminationStatus)
 }
 
 public struct IDeviceStatus: Sendable, Equatable {
@@ -178,7 +107,7 @@ public struct IDeviceBatterySource: BatteryDataSource {
     /// Lightweight status check for the `_status`/not-found warning paths.
     /// Unlike `fetchAll()`, this does NOT enumerate every connected device's
     /// battery info — it only runs a single `idevice_id -l` call (through the
-    /// same watchdog-protected `runLibimobiledeviceTool`) to determine
+    /// same watchdog-protected `runSubprocess`) to determine
     /// whether the tools are installed and runnable on `$PATH`. The
     /// "connected but unreadable" count comes from `unreadableCountCache`,
     /// last populated by whichever real `fetchAll()`/`fetchAllBlocking()`
@@ -187,12 +116,12 @@ public struct IDeviceBatterySource: BatteryDataSource {
     ///
     /// Kept synchronous (not `async`), same as `BLEBatterySource
     /// .fetchBluetoothStatus()` — its one subprocess call is bounded by
-    /// `runLibimobiledeviceTool`'s watchdog timeout, so a bounded blocking
+    /// `runSubprocess`'s watchdog timeout, so a bounded blocking
     /// call directly inside the async `CallTool` handler is consistent with
     /// how the existing Bluetooth-status check (bounded by its own socket
     /// read timeout) is already called there.
     public static func checkStatus() -> IDeviceStatus {
-        let idResult = runLibimobiledeviceTool("idevice_id", ["-l"])
+        let idResult = runSubprocess("idevice_id", ["-l"])
         return iDeviceStatus(fromToolsProbeExitCode: idResult.exitCode, cachedUnreadableCount: unreadableCountCache.value)
     }
 
@@ -205,8 +134,8 @@ public struct IDeviceBatterySource: BatteryDataSource {
     /// appears in both lists, so network results are filtered down to UDIDs
     /// not already found via USB before being queried with `-n`.
     private static func fetchAllBlocking() -> (devices: [DeviceBatteryInfo], status: IDeviceStatus) {
-        let usbResult = runLibimobiledeviceTool("idevice_id", ["-l"])
-        let networkResult = runLibimobiledeviceTool("idevice_id", ["-n"])
+        let usbResult = runSubprocess("idevice_id", ["-l"])
+        let networkResult = runSubprocess("idevice_id", ["-n"])
         guard usbResult.exitCode == 0 || networkResult.exitCode == 0 else {
             return ([], IDeviceStatus(toolsInstalled: false, connectedButUnreadableCount: 0))
         }
@@ -240,14 +169,14 @@ public struct IDeviceBatterySource: BatteryDataSource {
     private static func fetchDeviceInfo(udid: String, viaNetwork: Bool) -> DeviceBatteryInfo? {
         let baseArgs = viaNetwork ? ["-u", udid, "-n"] : ["-u", udid]
 
-        let batteryResult = runLibimobiledeviceTool("ideviceinfo", baseArgs + ["-q", "com.apple.mobile.battery", "-x"])
+        let batteryResult = runSubprocess("ideviceinfo", baseArgs + ["-q", "com.apple.mobile.battery", "-x"])
         guard batteryResult.exitCode == 0,
               let battery = parseBatteryPlist(batteryResult.stdout)
         else {
             return nil
         }
 
-        let identityResult = runLibimobiledeviceTool("ideviceinfo", baseArgs + ["-x"])
+        let identityResult = runSubprocess("ideviceinfo", baseArgs + ["-x"])
         let name = (identityResult.exitCode == 0 ? parseDeviceNamePlist(identityResult.stdout) : nil) ?? udid
 
         return DeviceBatteryInfo(
