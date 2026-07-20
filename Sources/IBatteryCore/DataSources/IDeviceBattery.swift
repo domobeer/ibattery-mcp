@@ -196,36 +196,58 @@ public struct IDeviceBatterySource: BatteryDataSource {
         return iDeviceStatus(fromToolsProbeExitCode: idResult.exitCode, cachedUnreadableCount: unreadableCountCache.value)
     }
 
+    /// `idevice_id -l` only lists USB-attached devices; a device reachable
+    /// solely over WiFi sync (no cable) never appears in that list, and
+    /// `ideviceinfo` without `-n` fails with "Device ... not found!" for such
+    /// a device even when given its UDID directly — confirmed against a real
+    /// iPhone with its USB cable unplugged. `idevice_id -n` lists
+    /// network-reachable devices separately; a device connected both ways
+    /// appears in both lists, so network results are filtered down to UDIDs
+    /// not already found via USB before being queried with `-n`.
     private static func fetchAllBlocking() -> (devices: [DeviceBatteryInfo], status: IDeviceStatus) {
-        let idResult = runLibimobiledeviceTool("idevice_id", ["-l"])
-        guard idResult.exitCode == 0 else {
+        let usbResult = runLibimobiledeviceTool("idevice_id", ["-l"])
+        let networkResult = runLibimobiledeviceTool("idevice_id", ["-n"])
+        guard usbResult.exitCode == 0 || networkResult.exitCode == 0 else {
             return ([], IDeviceStatus(toolsInstalled: false, connectedButUnreadableCount: 0))
         }
 
-        let output = String(data: idResult.stdout, encoding: .utf8) ?? ""
-        let udids = parseDeviceIdList(output)
+        let usbUDIDs = usbResult.exitCode == 0
+            ? parseDeviceIdList(String(data: usbResult.stdout, encoding: .utf8) ?? "")
+            : []
+        let networkUDIDs = networkResult.exitCode == 0
+            ? parseDeviceIdList(String(data: networkResult.stdout, encoding: .utf8) ?? "")
+            : []
+        let networkOnlyUDIDs = networkUDIDs.filter { !usbUDIDs.contains($0) }
 
         var devices: [DeviceBatteryInfo] = []
-        for udid in udids {
-            if let info = fetchDeviceInfo(udid: udid) {
+        for udid in usbUDIDs {
+            if let info = fetchDeviceInfo(udid: udid, viaNetwork: false) {
+                devices.append(info)
+            }
+        }
+        for udid in networkOnlyUDIDs {
+            if let info = fetchDeviceInfo(udid: udid, viaNetwork: true) {
                 devices.append(info)
             }
         }
 
-        let unreadableCount = udids.count - devices.count
+        let totalUDIDCount = usbUDIDs.count + networkOnlyUDIDs.count
+        let unreadableCount = totalUDIDCount - devices.count
         unreadableCountCache.value = unreadableCount
         return (devices, IDeviceStatus(toolsInstalled: true, connectedButUnreadableCount: unreadableCount))
     }
 
-    private static func fetchDeviceInfo(udid: String) -> DeviceBatteryInfo? {
-        let batteryResult = runLibimobiledeviceTool("ideviceinfo", ["-u", udid, "-q", "com.apple.mobile.battery", "-x"])
+    private static func fetchDeviceInfo(udid: String, viaNetwork: Bool) -> DeviceBatteryInfo? {
+        let baseArgs = viaNetwork ? ["-u", udid, "-n"] : ["-u", udid]
+
+        let batteryResult = runLibimobiledeviceTool("ideviceinfo", baseArgs + ["-q", "com.apple.mobile.battery", "-x"])
         guard batteryResult.exitCode == 0,
               let battery = parseBatteryPlist(batteryResult.stdout)
         else {
             return nil
         }
 
-        let identityResult = runLibimobiledeviceTool("ideviceinfo", ["-u", udid, "-x"])
+        let identityResult = runLibimobiledeviceTool("ideviceinfo", baseArgs + ["-x"])
         let name = (identityResult.exitCode == 0 ? parseDeviceNamePlist(identityResult.stdout) : nil) ?? udid
 
         return DeviceBatteryInfo(

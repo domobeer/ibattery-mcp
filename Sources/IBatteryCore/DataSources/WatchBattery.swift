@@ -104,12 +104,20 @@ public struct WatchBatterySource: BatteryDataSource {
         }
     }
 
+    /// Same USB+network merge as `IDeviceBatterySource.fetchAllBlocking()`:
+    /// `idevice_id -l` alone misses an iPhone reachable only over WiFi sync,
+    /// which would otherwise hide its paired Watch entirely.
     private static func fetchAllBlocking() -> [DeviceBatteryInfo] {
-        let idResult = runLibimobiledeviceTool("idevice_id", ["-l"])
-        guard idResult.exitCode == 0 else { return [] }
+        let usbResult = runLibimobiledeviceTool("idevice_id", ["-l"])
+        let networkResult = runLibimobiledeviceTool("idevice_id", ["-n"])
 
-        let output = String(data: idResult.stdout, encoding: .utf8) ?? ""
-        let iphoneUDIDs = parseDeviceIdList(output)
+        let usbUDIDs = usbResult.exitCode == 0
+            ? parseDeviceIdList(String(data: usbResult.stdout, encoding: .utf8) ?? "")
+            : []
+        let networkUDIDs = networkResult.exitCode == 0
+            ? parseDeviceIdList(String(data: networkResult.stdout, encoding: .utf8) ?? "")
+            : []
+        let iphoneUDIDs = usbUDIDs + networkUDIDs.filter { !usbUDIDs.contains($0) }
 
         var results: [DeviceBatteryInfo] = []
         for iphoneUDID in iphoneUDIDs {
@@ -142,7 +150,8 @@ public struct WatchBatterySource: BatteryDataSource {
 
     private static func fetchWatches(pairedWithIPhoneUDID iphoneUDID: String) -> [DeviceBatteryInfo] {
         var device: idevice_t?
-        guard idevice_new(&device, iphoneUDID) == IDEVICE_E_SUCCESS, let device else {
+        let lookupOptions = idevice_options(IDEVICE_LOOKUP_USBMUX.rawValue | IDEVICE_LOOKUP_NETWORK.rawValue)
+        guard idevice_new_with_options(&device, iphoneUDID, lookupOptions) == IDEVICE_E_SUCCESS, let device else {
             return []
         }
         defer { idevice_free(device) }
