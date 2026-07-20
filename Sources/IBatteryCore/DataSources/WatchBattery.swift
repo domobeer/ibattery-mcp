@@ -118,6 +118,28 @@ public struct WatchBatterySource: BatteryDataSource {
         return results
     }
 
+    /// The companion_proxy service closes its connection after replying to
+    /// *every* request (`companion_proxy_get_device_registry` and
+    /// `companion_proxy_get_value_from_registry` both document this). A
+    /// `companion_proxy_client_t` is therefore single-use: reusing one across
+    /// calls sends the next request on an already-closed connection, which
+    /// fails with `COMPANION_PROXY_E_SSL_ERROR` — confirmed against a real
+    /// paired Watch. Every request in this file opens its own short-lived
+    /// client instead of sharing one.
+    private static func withFreshCompanionClient<T>(
+        device: idevice_t,
+        _ body: (companion_proxy_client_t) -> T?
+    ) -> T? {
+        var client: companion_proxy_client_t?
+        guard companion_proxy_client_start_service(device, &client, "ibattery-mcp") == COMPANION_PROXY_E_SUCCESS,
+              let client
+        else {
+            return nil
+        }
+        defer { companion_proxy_client_free(client) }
+        return body(client)
+    }
+
     private static func fetchWatches(pairedWithIPhoneUDID iphoneUDID: String) -> [DeviceBatteryInfo] {
         var device: idevice_t?
         guard idevice_new(&device, iphoneUDID) == IDEVICE_E_SUCCESS, let device else {
@@ -125,51 +147,62 @@ public struct WatchBatterySource: BatteryDataSource {
         }
         defer { idevice_free(device) }
 
-        var client: companion_proxy_client_t?
-        guard companion_proxy_client_start_service(device, &client, "ibattery-mcp") == COMPANION_PROXY_E_SUCCESS,
-              let client
-        else {
-            return []
-        }
-        defer { companion_proxy_client_free(client) }
-
-        var pairedDevicesPlist: plist_t?
-        guard companion_proxy_get_device_registry(client, &pairedDevicesPlist) == COMPANION_PROXY_E_SUCCESS,
-              let pairedDevicesPlist
-        else {
-            return []
-        }
-        defer { plist_free(pairedDevicesPlist) }
-
-        let watchUDIDs = parseUDIDList(fromPairedDevicesPlist: pairedDevicesPlist)
+        let watchUDIDs = withFreshCompanionClient(device: device) { client -> [String]? in
+            var pairedDevicesPlist: plist_t?
+            guard companion_proxy_get_device_registry(client, &pairedDevicesPlist) == COMPANION_PROXY_E_SUCCESS,
+                  let pairedDevicesPlist
+            else {
+                return nil
+            }
+            defer { plist_free(pairedDevicesPlist) }
+            return parseUDIDList(fromPairedDevicesPlist: pairedDevicesPlist)
+        } ?? []
 
         var results: [DeviceBatteryInfo] = []
         for watchUDID in watchUDIDs {
-            if let info = fetchWatchBatteryInfo(client: client, watchUDID: watchUDID) {
+            if let info = fetchWatchBatteryInfo(device: device, watchUDID: watchUDID) {
                 results.append(info)
             }
         }
         return results
     }
 
-    private static func fetchWatchBatteryInfo(client: companion_proxy_client_t, watchUDID: String) -> DeviceBatteryInfo? {
-        var capacityPlist: plist_t?
-        let capacityResult = companion_proxy_get_value_from_registry(client, watchUDID, "BatteryCurrentCapacity", &capacityPlist)
-        guard capacityResult == COMPANION_PROXY_E_SUCCESS, let capacityPlist else {
+    /// `companion_proxy_get_value_from_registry` doesn't return the requested
+    /// value as a bare scalar: it returns a one-entry dict keyed by the same
+    /// key that was requested (e.g. `{"BatteryCurrentCapacity": 100}`,
+    /// confirmed against a real paired Watch via `plist_to_xml`). This
+    /// unwraps that envelope and returns an independently-owned copy of the
+    /// inner node, since the envelope dict is freed before returning.
+    private static func fetchRegistryValue(device: idevice_t, watchUDID: String, key: String) -> plist_t? {
+        let envelope = withFreshCompanionClient(device: device) { client -> plist_t? in
+            var valuePlist: plist_t?
+            guard companion_proxy_get_value_from_registry(client, watchUDID, key, &valuePlist) == COMPANION_PROXY_E_SUCCESS,
+                  let valuePlist
+            else {
+                return nil
+            }
+            return valuePlist
+        }
+        guard let envelope else { return nil }
+        defer { plist_free(envelope) }
+        guard let inner = plist_dict_get_item(envelope, key) else { return nil }
+        return plist_copy(inner)
+    }
+
+    private static func fetchWatchBatteryInfo(device: idevice_t, watchUDID: String) -> DeviceBatteryInfo? {
+        guard let capacityPlist = fetchRegistryValue(device: device, watchUDID: watchUDID, key: "BatteryCurrentCapacity") else {
             return nil
         }
         defer { plist_free(capacityPlist) }
 
-        var chargingPlist: plist_t?
-        _ = companion_proxy_get_value_from_registry(client, watchUDID, "BatteryIsCharging", &chargingPlist)
+        let chargingPlist = fetchRegistryValue(device: device, watchUDID: watchUDID, key: "BatteryIsCharging")
         defer { if let chargingPlist { plist_free(chargingPlist) } }
 
         guard let battery = parseWatchBatteryValue(fromCapacityPlist: capacityPlist, chargingPlist: chargingPlist) else {
             return nil
         }
 
-        var productTypePlist: plist_t?
-        _ = companion_proxy_get_value_from_registry(client, watchUDID, "ProductType", &productTypePlist)
+        let productTypePlist = fetchRegistryValue(device: device, watchUDID: watchUDID, key: "ProductType")
         defer { if let productTypePlist { plist_free(productTypePlist) } }
         let name = parseWatchProductType(fromPlist: productTypePlist) ?? watchUDID
 
