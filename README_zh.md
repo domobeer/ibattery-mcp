@@ -108,3 +108,7 @@ open "$(brew --prefix ibattery-mcp)/libexec/ibattery-ble-helper.app"
 - [AirBattery](https://github.com/lihaoyun6/AirBattery) —— 启发本项目的前驱
   工作。`ibattery-mcp` 是独立的、干净重写的实现（原因见[设计文档](./docs/superpowers/specs/2026-07-19-ibattery-mcp-design.md)），
   与它不共享任何代码。
+
+## Star 历史
+
+[![Star History Chart](https://api.star-history.com/svg?repos=China-Drummond/ibattery-mcp&type=Date)](https://star-history.com/#China-Drummond/ibattery-mcp&Date)

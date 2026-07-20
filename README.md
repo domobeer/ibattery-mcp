@@ -121,3 +121,7 @@ environment, run the test suite, and submit changes.
   inspired this project. `ibattery-mcp` is an independent, clean-room
   reimplementation (see the [design doc](./docs/superpowers/specs/2026-07-19-ibattery-mcp-design.md)
   for why) and shares no code with it.
+
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=China-Drummond/ibattery-mcp&type=Date)](https://star-history.com/#China-Drummond/ibattery-mcp&Date)
