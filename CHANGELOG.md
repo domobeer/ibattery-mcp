@@ -31,6 +31,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   ISO8601 timestamp in this Mac's local UTC offset, alongside the existing
   UTC `lastUpdated`, so a caller doesn't need to separately know the user's
   timezone to reason about how fresh a reading is.
+- AirPods: real-time battery, charging state, and per-bud in-case status
+  (`inCase`, `lidOpen` fields) parsed from plaintext BLE advertisements,
+  with `system_profiler` as fallback — per the amended engineering
+  principle (see docs/superpowers/specs/2026-07-20-ble-advertisement-design.md).
+- iPhone/iPad: battery readable while the phone is locked, via a standard
+  Bluetooth GATT Battery Service read of devices spotted by the helper's
+  new passive advertisement listener.
+- ibattery-ble-helper: new persistent advertisement monitor and "snapshot"
+  IPC request (existing "scan"/"status" requests unchanged).
 
 ### Fixed
 - Apple Watch battery reading failed against real hardware in two ways: (1)

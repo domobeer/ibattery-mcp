@@ -18,9 +18,9 @@ or any other MCP client) can call.
 |---|---|
 | This Mac's own battery | ⚠️ Implemented, unit-tested — not yet confirmed against real hardware |
 | Generic Bluetooth devices (standard Battery Service — most Bluetooth mice/keyboards) | ⚠️ Implemented, unit-tested — real BLE scanning works, but no compatible peripheral confirmed yet |
-| iPhone / iPad | ✅ Verified against a real device |
+| iPhone / iPad | ✅ Verified over USB/WiFi · ⚠️ locked-phone Bluetooth path implemented, not yet hardware-verified |
 | Apple Watch (via a paired iPhone) | ✅ Verified against real hardware |
-| AirPods | ⚠️ Implemented, unit-tested — not yet confirmed against real hardware |
+| AirPods | ⚠️ Real-time levels, charging and per-bud in-case status via BLE advertisements (with `system_profiler` fallback) — implemented, unit-tested, not yet confirmed against real hardware |
 | Another Mac on the same network | ❌ Not planned — see [Why not another Mac?](#why-not-another-mac) below |
 
 This project is pre-1.0 and under active development. See
@@ -39,6 +39,15 @@ works around this the same way a normal Mac app would: a small companion app,
 (`open`, or as a login item); the stateless MCP server talks to it over a
 local Unix domain socket. See the [design doc](./docs/superpowers/specs/2026-07-19-ibattery-mcp-design.md)
 for the full story, including how this was discovered.
+
+Besides on-demand scans, the helper also passively listens for BLE
+advertisements in the background (15s at launch, then 5s every 30s): AirPods
+broadcast their battery, charging and in-case state in plaintext while in
+use, and stop shortly after their lid closes — continuous listening is what
+catches the lid-close message carrying the exact per-bud in-case state. The
+same listener spots nearby iOS devices so their battery can be read over
+standard Bluetooth GATT even while they're locked and unreachable via WiFi
+sync.
 
 ## Why not another Mac?
 

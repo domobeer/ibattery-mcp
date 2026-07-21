@@ -26,9 +26,10 @@ private func makeToolDefinitions() -> [Tool] {
             description: """
             Get battery and charging status for all Apple devices discoverable from this Mac: \
             this Mac's own battery, nearby Bluetooth devices exposing standard battery reporting, \
-            a paired iPhone/iPad, an Apple Watch reachable through that iPhone, and AirPods \
-            (or other Apple-vendor earbuds) known to this Mac's Bluetooth stack, even when \
-            currently connected to a different device on the same iCloud account.
+            a paired iPhone/iPad (over USB/WiFi sync, or — even while locked — via a Bluetooth \
+            battery read), an Apple Watch reachable through that iPhone, and AirPods (or other \
+            Apple-vendor earbuds) known to this Mac's Bluetooth stack, including per-bud \
+            in-case status and charging state when they're nearby and broadcasting.
             """,
             inputSchema: .object([
                 "type": "object",
