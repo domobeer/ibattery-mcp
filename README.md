@@ -18,9 +18,9 @@ or any other MCP client) can call.
 |---|---|
 | This Mac's own battery | ⚠️ Implemented, unit-tested — not yet confirmed against real hardware |
 | Generic Bluetooth devices (standard Battery Service — most Bluetooth mice/keyboards) | ⚠️ Implemented, unit-tested — real BLE scanning works, but no compatible peripheral confirmed yet |
-| iPhone / iPad | ✅ Verified over USB/WiFi · ⚠️ locked-phone Bluetooth path implemented, not yet hardware-verified |
+| iPhone / iPad | ✅ Verified over USB/WiFi · ✅ locked-phone Bluetooth path verified against a real locked iPhone |
 | Apple Watch (via a paired iPhone) | ✅ Verified against real hardware |
-| AirPods | ⚠️ Real-time levels, charging and per-bud in-case status via BLE advertisements (with `system_profiler` fallback) — implemented, unit-tested, not yet confirmed against real hardware |
+| AirPods | ✅ Real-time levels, charging, lid state and in-case status via BLE advertisements (with `system_profiler` fallback) — verified against real AirPods 4. Known limitation: with the lid closed, AirPods 4's lid-close message uses a state-byte value outside the four documented ones, so per-bud in-case is honestly `null` then (it reports while the lid is open) |
 | Another Mac on the same network | ❌ Not planned — see [Why not another Mac?](#why-not-another-mac) below |
 
 This project is pre-1.0 and under active development. See

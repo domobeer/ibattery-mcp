@@ -35,14 +35,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   (`inCase`, `lidOpen` fields) parsed from plaintext BLE advertisements,
   with `system_profiler` as fallback — per the amended engineering
   principle (see docs/superpowers/specs/2026-07-20-ble-advertisement-design.md).
-  **Live levels and charging state verified against real AirPods; per-bud
-  in-case status not yet observed on real hardware** — see the project
-  README's Status section.
+  **Verified against real AirPods 4: live levels, charging, lid state, and
+  in-case status (reported while the lid is open; AirPods 4's lid-close
+  message uses a state byte outside the four documented values, so per-bud
+  in-case is honestly `null` while closed)** — see the project README's
+  Status section.
 - iPhone/iPad: battery readable while the phone is locked, via a standard
   Bluetooth GATT Battery Service read of devices spotted by the helper's
-  new passive advertisement listener. **Mechanism verified against a real
-  nearby iOS device; not yet verified against the locked target iPhone** —
-  see the project README's Status section.
+  new passive advertisement listener. **Verified against a real locked
+  iPhone (and a nearby iPad)** — see the project README's Status section.
 - ibattery-ble-helper: new persistent advertisement monitor and "snapshot"
   IPC request (existing "scan"/"status" requests unchanged).
 
